@@ -3,7 +3,7 @@ Machine Learning Summer Session 2021: Exam for part 1
 
 [Intro to Machine Learning {Take Home Exam}](https://github.com/conoly/STA380Exam-pt1/blob/1a23fb8836aa45c9c1de13ec439a86209eefbda8/Exam_MSBA.pdf)
 
-Book Problems from An Introduction to Statistical Learning
+Book Problems from An Introduction to Statistical Learning [(link here)](https://www.statlearning.com/)
 
 Problems include Examples for:
 1. Simple and Multiple Linear Regression
@@ -11,3 +11,5 @@ Problems include Examples for:
 3. Partial Least Squares and Principal Components Regression
 4. Tree Based Methods
 5. Logistic Regression
+
+All work completed in 'R' programming language. 
