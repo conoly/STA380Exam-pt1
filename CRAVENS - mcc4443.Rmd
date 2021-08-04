@@ -1,0 +1,1718 @@
+---
+title: "Take Home Exam"
+author: "Conoly Cravens (mcc4443)"
+date: "8/1/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+options(tinytex.verbose = TRUE)
+```
+
+# Book Problems
+
+## Chapter 2: #10
+### (a)
+First, we load in the Boston data set from the *MASS* library and create a variable, **Boston** defined as a data frame from the data set. 
+
+The dimensions [rows, columns] of the data frame are:
+```{r, 2.10a, echo=FALSE}
+rm(list=ls())
+
+library(MASS)
+library(class)
+
+Boston = data.frame(Boston)
+
+dim(Boston)
+```
+
+So, there are 506 rows representing the 506 observations (size of the sample). And there are 14 columns, or 14 variables that describe each of those observations. 
+
+### (b)
+To get a feel for the data and potential relationships, we create some pairwise scatter plots of the variables: 
+
+```{r, 2.10 Pairwise Plots, echo=FALSE}
+plot(Boston)
+```
+
+There is a lot going on here considering the number of variables. We can see how the each of the 14 variables interact with another individually. To call out a few findings: If the tract is bound to Charles River, we see lower crime rates and lower black population. Also, we see lstat and medev have a decently strong negative correlation. 
+
+### (c)
+Using the pairwise scatter plots, we see that there are predictors associated with per capita crime rate (crim):
+
+* There is a lower crime rate in suburbs with a higher proportion of residential land zoned for lots over 25,000 sq.ft.
+* Crime rates are lower for suburbs lining the Charles river.
+* Crime rates are lower for suburbs with newer buildings.
+* Crime rates increase with property tax rates. 
+
+### (d)
+The best way to tell the spread of crime rates, tax rates, and pupil-to-teacher ratios for the data set is to look for box plots for each variable. 
+
+```{r, 2.10 Box Plots, echo=FALSE, fig.show="hold", out.width="33%"}
+boxplot(Boston$crim)
+title("per capita crime rate")
+boxplot(Boston$tax)
+title("property tax rate")
+boxplot(Boston$ptratio)
+title("pupil-teacher ratio")
+```
+
+
+Using the boxplots, we make the following conclusions:
+
+* **Crime Rates**: The box plot shows there are a lot of suburbs that have more or less no crime. There is a large overall range of crime rates with a significant number of out liars with *HIGH* crime rates. However, as noted in part c above, there are other factors/variables potentially impacting crime rate & this spread making the data skewed.
+* **Tax Rates**: there are not any significant out liars in this data even through the range could be interpreted as large.
+* **P-Teacher Ratio**: There are two suburbs with signifgantly *LOW* ratios. 
+
+### (e)
+We look at a summary table of the Charles River dummy variable:
+
+```{r, 2.10e, echo=FALSE}
+table(Boston$chas) 
+```
+and see there are *35* suburbs in this dataset bound to the Charles river. 
+
+### (f)
+The median pupil-teacher ratio is:
+```{r, 2.10f, echo=FALSE}
+median(Boston$ptratio)
+```
+
+### (g)
+The index of the suburb with the lowest median value of owner-occupied homes (medv) is:
+```{r, 2.10g index, echo=FALSE}
+low = which.min(Boston$medv)
+```
+The values of the other predictors for this suburb are:
+```{r, 2.10g predictor summary, echo=FALSE}
+Boston[low,]
+```
+We then compare that to the summary table of the values at each quartile for each variable:
+```{r, 2.10g quartiles, echo=FALSE}
+apply(Boston,MARGIN=2,FUN=quantile)
+```
+
+Comparing the values of the other predictors for 'lowest valued' suburb to the quartile summary table, we see:
+
+* This suburb lowest medv is the suburb with the oldest houses, highest accessibility to radical highways. 
+* It also falls into the top 25% suburbs of crime rate, proportion of of non-retail business, pupil-to-teacher ratio, nitrogen oxides concentration. {Note: the top 25% represents the 'worst' 25% for these variables}
+* It also falls within the bottom 25% of average rooms and distance to employment centers. 
+* Lastly, it is not on the Charles river. 
+
+### (h)
+We see the number of suburbs averaging more than 7 rooms per dwelling is 64 from the table below:
+```{r, 2.10h 7 rooms, echo=FALSE}
+table(Boston$rm > 7)
+```
+
+We also see the number of suburbs averaging more than 8 rooms per dwelling is 13 from the table below:
+```{r, 2.10h 8 rooms, echo=FALSE}
+table(Boston$rm > 8)
+```
+Looking at the group of suburbs which average more than 8 person dwelling, this is the average of the other variables:
+```{r, 2.10h 8room group, echo=FALSE}
+group = which(Boston$rm>8)
+
+apply(Boston[group,],MARGIN=2,FUN=mean)     #shows us the average value for each variable in this subset
+```
+
+And we compare to quartile summary table we looked at in the question above.
+```{r, 2.10h quartile, echo=FALSE}
+apply(Boston,MARGIN=2,FUN=quantile)
+```
+
+By doing that, we can draw the following conclusions: 
+
+* The suburbs with avg. rooms >8 also have a higher median value and high proportion of residential plot zoned for lots > 25K sq.ft {both of which make logical sense}
+* Additionally, they have a lower percentage of lower-skilled workers.
+
+## Chapter 3: #15
+### (a)
+First, we load in the Boston data set from the *MASS* library and create a variable, **Boston** defined as a data frame from the data set. 
+
+The list of variables (which we assign to a variable **factors**) are:
+
+```{r, 3.15 setup, echo=FALSE, include=FALSE}
+rm(list=ls())
+
+library(dplyr)
+library(MASS)
+library(class)
+
+Boston = data.frame(Boston)
+```
+```{r, 3.15 factors, echo=FALSE}
+factors = colnames(Boston)
+factors
+```
+
+We want to predict (y =) per capita crime rate based on the remaining 13 predictors. 
+
+First, I fit a simple linear regression for each predictor available lm(crim ~ predictor). Here is a summary table of each model including both coefficients (slope and intercept), the p-value for the slope, and r2 for the model:
+```{r, 3.15a summary table, echo=FALSE}
+# Linear model set up - crim is the 'y' output for every model
+y = Boston$crim
+
+#Summary table set-up
+R2 = c()
+P_value = c()
+slope = c()
+intercept = c()
+
+#For every variable...
+for (i in 1:length(factors)){
+  
+  #If column = crim then move one
+  if (factors[i] == 'crim') {
+    next
+    
+  }
+  #Otherwise:
+    x = Boston[,i]  #set that column as x-variable 
+    reg = lm(y ~ x,data=Boston) #run a linear regression model
+    
+    #Record slope, intercept, r2, and slope p-value for each model
+    slope[i] = summary(reg)$coefficients[2, 1]  
+    intercept[i] = summary(reg)$coefficients[1, 1]
+  
+    R2[i] = summary(reg)$adj.r.squared
+    P_value[i] = summary(reg)$coefficients[2,4]
+}
+  
+#Display summary table in order of descending p-value order
+regres_summary = data.frame(varnames = names(Boston),R2,P_value,slope,intercept)
+regres_summary[order(-P_value),]
+```
+
+* Off the bat, we see some of the variables are positively correlated to crim and some are negatively correlated (both + & - slopes). The slopes are relatively small (most are under 1). 
+
+* Additionally, it appears that all variables except 'chas' are statistically significant according to p-value (0.21 < 0.05).
+
+* The largest R2 value corresponds to index of accessibility to radial highways. 
+
+Now to look at graphs for each of these models:
+```{r, 3.15a graphs, echo=FALSE, fig.show="hold", out.width="25%"}
+# Linear model set up - crim is the 'y' output for every model
+y = Boston$crim
+
+#For every variable...
+for (i in 1:length(factors)){
+  
+  #If column = crim then move one
+  if (factors[i] == 'crim') {
+    next
+    
+  }
+  
+  
+  #Otherwise:
+  x = Boston[,i]  #set that column as x-variable 
+  
+  fit = lm(y ~ x,data=Boston)
+  plot(x,y,xlab = names(Boston)[i],ylab = 'Per Capita Crime')
+  abline(fit, col='red')
+}
+```
+
+We see a couple of thing from these graphs for this data set.
+
+The variables which look like a more 'typical' regression: 
+
+* **Nox & Lstat**: Crime rates increase as both of these variables (individually) increase.
+  + Nox has the largest (+) slope value
+  + Lstat also has a positve slope value
+* **Rm & Medv**: As average number of rooms per dwelling increases, crime decreases. Additionally, as median value of owner-occupied homes increases, crime decreases.
+  + This makes logical sense considering more rooms typically means nicer houses (more expesnive) which we can assume this means 'nicer' neighborhoods
+  + We can see that with a negative slopes for both
+
+Other observations from the graphs include:
+
+* Crime only happens when proportion of residential land zoned for lots over 25,000 sq.ft (zn) is 0 -- this is the variable with the second highest p-value for the slope
+* Crime mainly occurs when:
+  + The proportion of non-retail business acres per town (indus) is around 18/19
+  + When the index of accessibility to radial highways is at it's highest value (rad)
+  + The full-value property-tax rate is ~675/ per 10k
+  + The pupil-to-teacher ratio is close to 20
+* **Crim**: higher distribution of crime for suburbs not on tract, but there is still some crime for the suburbs on the tract. This may be why this is deemed as not significant.
+* **Age & Black**: Crime rates mainly increase in the bottom right hand corner of these graphs
+
+### (b) 
+However, the best way to actually predict crime is not looking at these predictors individually and instead all together in a *multiple regression model*. This will tell us how each factor impacts crime rate when all other predictors are held constant. 
+
+Here is a summary table for a multiple regression model:
+```{r, 3.15b summary table, echo=FALSE}
+# Fit multiple regression model:
+crim_lm = lm(Boston$crim ~. ,data=Boston) 
+summary(crim_lm) #display summary table
+```
+
+Looking at the summary table, we see a variety of + and - slopes and a wide spread of p-values. 
+
+To determine significance we want to conduct a hypothesis test on the null hypothesis:
+$H_0 : \beta_0 = 0$
+
+To analyze the null hypothesis we examine the p-values of each factor. At a minimum we want to be 95% confident that there is a correlation meaning the coefficient does NOT equal 0 (to reject p < 0.05). 
+
+
+Looking at the p-values, can conclude that the following variables have a signifgant relationship to crime rate: **zn**, **indus**, **dis**, **rad**, **medv**.
+
+### (c) 
+The multiple regression produced different coefficients than the linear regression model (even a move from + to -). The most drastic move was for the *Nox* variable - in simple LR, it had a positive slope of over 30 but in multiple MR, it had a negative slope of ~10:
+
+```{r, 3.15c summary, echo=FALSE}
+#Summary table
+summary = data.frame(
+  'Simple' = regres_summary$slope,
+  'Multiple' = summary(crim_lm)$coefficients[,1])
+
+summary[2:14,]
+```
+
+Here is a plot displaying the two coefficients for each predictor:
+
+```{r, 3.15c, echo=FALSE, fig.show="hold"}
+#Made a summary table (unneccesary) 
+multi_summary = data.frame(regres_summary$slope,summary(crim_lm)$coefficients[,1])
+plot(multi_summary$regres_summary.slope,multi_summary$summary.crim_lm..coefficients...1.,
+     xlab='Coefficent from Simple',
+     ylab = 'Coefficent from Multiple')
+```
+
+### (d)
+To test if there is a non-linear association between any predictor and crime rate, I fit a cubic model for each x and conducted a hypothesis test using a 95% confidence for the coefficients (starting at $x^3$ coefficient and going down the list)
+
+* If: P-value for coefficient for $x^3$ < 0.05 -- cubic fit
+* If: P-value for coefficient for $x^2$ < 0.05 -- quadratic fit
+* If: P-value for coefficient for $x$ < 0.05 -- linear fit
+* Otherwise: no relationship
+
+Here is a summary table showing the p-values for each coefficient and the concluding relationship:
+
+```{r, 3.15d, echo=FALSE}
+#Polynomial set ip
+y = Boston$crim
+R2 = c()
+P_value = c()
+Pval_x1 = c()
+Pval_x2 = c()
+Pval_x3 = c()
+
+
+for (i in 1:length(factors)){
+  
+  #when column is not equal to crime rate...
+  if (factors[i] == 'crim') {
+    next
+    
+  }
+  if (factors[i] == 'chas') {
+    next
+    
+  }
+  x = Boston[,i]
+  reg = lm(y ~ poly(x,3),data=Boston)
+  
+  Pval_x1[i] = summary(reg)$coefficients[2, 4]
+  Pval_x2[i] = summary(reg)$coefficients[3, 4]
+  Pval_x3[i] = summary(reg)$coefficients[4, 4]
+  R2[i] = summary(reg)$adj.r.squared
+  
+}
+
+poly_summary = data.frame(
+'Variable Names' = names(Boston),
+'Pvalue x' = Pval_x1,
+'Pvalue x^2'= Pval_x2,
+'Pvalue x^3'= Pval_x3)
+
+mutate(poly_summary,Relationship = case_when(Pval_x3 < 0.05 ~ "Cubic",
+                                              Pval_x2 < 0.05 ~ "Quadratic",
+                                              Pval_x1 < 0.05 ~ "Linear",
+                                              TRUE ~ "No Relationship"))
+```
+
+## Chapter 6: #9
+### (a)
+Data is split into training and test sets.
+```{r, 6.9a, echo=FALSE}
+rm(list=ls())
+
+library(dplyr)
+library(ISLR)
+library(class)
+
+college = data.frame(College)
+
+### A. 
+set.seed(100)
+train = sample(1:nrow(college),nrow(college)*0.7)
+college.train = college[train,]
+college.test = college[-train,]
+```
+
+### (b)
+First, I fit a least squared linear regression model on the training test. The test error obtained was:
+
+```{r, 6.9b , echo=FALSE}
+#Fit linear model on TRAIN
+ls_mod = lm(Apps ~.,data=college.train)
+```
+
+```{r, 6.9b ls mse, echo=FALSE}
+
+#Calculate TEST MSE
+ls_pred = predict(ls_mod, college.test) #find values that the ls reg would predict
+ls_mse = mean((ls_pred - college.test$Apps)^2) #calculate test MSE
+ls_mse
+```
+
+
+### (c)
+Next, I fit a ridge regression model on the training set and chose the $\lambda$ by cross validation. The test error obtained was:
+```{r, 6.9c , echo=FALSE, include=FALSE}
+library(glmnet)
+
+#Matrix for training and test sets
+train.mat = model.matrix(Apps~.,data=college.train)
+test.mat = model.matrix(Apps~.,data=college.test)
+
+#Grid of all ranges of lambda
+grid = 10^seq(10,-2,length=100)
+
+#ridge regression model (note: standardization is automatically applied)
+set.seed(4)
+ridge.mod = glmnet(train.mat,college.train$Apps,alpha = 0, lambda=grid,thresh = 1e-12)
+
+#Cross validation
+set.seed(4)
+cv.ridge = cv.glmnet(train.mat,college.train$Apps,alpha=0,lambda=grid,thresh = 1e-12)
+
+#finding the lambda for which cv error is minimum on training data
+bestlam.ridge = cv.ridge$lambda.min
+
+#Use best lambda value on test data set to get the predicted values
+ridge_pred = predict(ridge.mod,s=bestlam.ridge,newx =test.mat)
+```
+```{r, 6.9c ridge mse, echo=FALSE}
+#Mean Square Error calculation
+ridge_mse = mean((college.test$Apps-ridge_pred)^2)
+ridge_mse
+```
+
+### (d)
+Next, I fit a lasso regression model on the training set and chose a $\lambda$ using cross validation. The test error obtained was:
+```{r, 6.9d lasso error, echo=FALSE}
+#Lasso regression model
+set.seed(100)
+lasso.mod = glmnet(train.mat,college.train$Apps,alpha = 1, lambda=grid,thresh = 1e-12)
+
+#Cross validation
+set.seed(4)
+cv.lasso = cv.glmnet(train.mat,college.train$Apps,alpha=1,lambda=grid,thresh = 1e-12)
+
+#finding the lambda for which cv error is minimum on training data
+bestlam.lasso = cv.lasso$lambda.min
+
+#Use best lambda value on test data set to get the predicted values
+lasso_pred = predict(lasso.mod,s=bestlam.lasso,newx =test.mat)
+
+#Mean Square Error calculation
+lasso_mse = mean((college.test$Apps-lasso_pred)^2)
+lasso_mse
+```
+
+Additionally, the number of non-zero coefficients estimates is:
+```{r, 6.9d lasso non zero, echo=FALSE, include=FALSE}
+set.seed(4)
+lasso.coef = predict(lasso.mod,s=bestlam.lasso,type="coefficients")
+lasso_best = length(lasso.coef[lasso.coef!=0])
+```
+```{r, 6.9d lasso non zerob, echo=FALSE}
+lasso_best
+```
+
+### (e)
+Next, we fit a PCR model on the training test and chose M using cross validation (built into pcr). To determine the lowest test error, we look at summary table:
+```{r, 6.9e PCR summary table, echo=FALSE, include=FALSE}
+set.seed(4)
+library(pls)
+
+#Setting PCR Model
+set.seed(10)
+pcr.mod = pcr(college.train$Apps~.,data=college.train, scale=TRUE,validation='CV')
+```
+
+```{r, 6.9e PCR summary table print, echo=FALSE}
+summary(pcr.mod)
+```
+
+Here is a graph of the test errors for each M to visualize:
+
+```{r, 6.9e PCR error plot, echo=FALSE}
+validationplot(pcr.mod,val.type='MSEP')
+```
+
+We see that the lowest error actually occurs when all **17** predictors are used. 
+
+The test error is NOT equal to the value seen in the summary table (that is actually the ${\sqrt{Training MSE}}$). The test error is:
+
+```{r, 6.9e PCR error calc, echo=FALSE}
+pcr_best = 17
+
+set.seed(4)
+pcr_pred = predict(pcr.mod,college.test,ncomp = pcr_best)
+
+#Calculate MSE
+pcr_mse = mean((pcr_pred-college.test$Apps)^2)
+pcr_mse
+```
+
+### (f)
+Next, we fit a PCL model on the training test and chose M using cross validation (built into pcr). To determine the lowest test error, we look at summary table:
+
+```{r, 6.9f PCL summary table, echo=FALSE}
+#Fit PLS
+set.seed(4)
+pls.mod = plsr(college.train$Apps~., data=college.train, scale=TRUE,validation='CV')
+summary(pls.mod)
+```
+Here is a graph of the test errors for each M to visualize:
+
+```{r, 6.9f PCL error plot, echo=FALSE}
+validationplot(pls.mod,val.type='MSEP')
+```
+
+We see that the lowest error actually occurs when **9** predictors are used. 
+
+The test error obtained is NOT equal to the value seen in the summary table (that is actually the ${\sqrt{Training MSE}}$). The test error is:
+
+```{r, 6.9f PCR error calc, echo=FALSE}
+pls_best = 9
+
+#Predict on lowest number of components
+set.seed(4)
+pls_pred = predict(pls.mod,college.test,ncomp = pcr_best)
+
+#Calculate MSE
+pls_mse = mean((pls_pred-college.test$Apps)^2)
+pls_mse
+```
+
+### (g)
+A quick summary of each of the five models we ran:
+
+```{r, 6.9g, echo=FALSE}
+# R2 = 1 - (SS_res / SS_tot)^2
+SS_tot <- sum((college.test$Apps - mean(college.test$Apps))^2)
+
+summary_table = data.frame(
+  'Model' = c('Least Scquared','Ridge','Lasso','PCR','PLS'),
+  'R2' = c(1 - sum((college.test$Apps - ls_pred)^2) / SS_tot,
+           1 - sum((college.test$Apps - ridge_pred)^2) / SS_tot, 
+           1 - sum((college.test$Apps - lasso_pred)^2) / SS_tot,
+           1 - sum((college.test$Apps - pcr_pred)^2) / SS_tot, 
+           1 - sum((college.test$Apps - pls_pred)^2) / SS_tot),
+  'Error' = c(ls_mse,ridge_mse,lasso_mse,pcr_mse,pls_mse)
+)
+summary_table
+```
+All models performed well with a test $R^2$ values above 0.93.
+
+Examining the errors, there is a minimal performance difference between each of the 5 methods. The only model that could have a meaningful performance difference would be ridge (which performed the worst with the largest error).
+
+All things considered, with a different seed the models and errors would shift around. 
+
+## Chapter 6: #11
+### (a)
+I fit a least squared regression model, ridge regression, lasso regression, principal components regression, and partial least squared regression on a training set of the Boston data set and computed a test MSE value for each method.
+
+```{r, 6.11a setup, echo=FALSE}
+rm(list=ls())
+
+library(ggplot2)
+library(dplyr)
+library(MASS)
+Boston = data.frame(Boston)
+
+#Splitting into train & test
+set.seed(5)
+train = sample(1:nrow(Boston),nrow(Boston)/2)
+boston.train = Boston[train,]
+boston.test = Boston[-train,]
+```
+
+```{r, 6.11a ls, echo=FALSE}
+#LEAST SQUARED Model
+set.seed(4)
+ls_mod = lm(crim~.,data=boston.train)
+```
+#### Multiple Least Squared Regression Model
+
+
+\begin{eqnarray}
+Y = \\
+& 15.81 + 0.05(zn)-0.15(indus)-1.12(chas)-8.97(nox)+1.19(rm)-0.02(age)-1.47(dis)\\
+& 0.72(rad)-0.01(tax)-0.33(ptratio)-0.0003(black)+0.25(lstat)-0.30(medv)+\varepsilon
+\end{eqnarray}
+
+
+However after conducting a hypothesis test, we see that only the following variables are statistically significant:
+
+* Dis
+* Rad
+* Medv
+
+Test MSE:
+
+```{r, 6.11a ls mse, echo=FALSE}
+set.seed(4)
+ls_pred = predict(ls_mod,boston.test)
+ls_mse = mean((ls_pred-boston.test$crim)^2)
+ls_mse
+```
+
+#### Ridge Regression Model
+
+We ran a ridge regression model and determined the optimal $\lambda$ value using cross validation: 
+
+```{r, 6.11a ridge, echo=FALSE}
+#RIDGE Model
+library(glmnet)
+
+#Matrix for training and test sets
+train.mat = model.matrix(crim~.,data=boston.train)
+test.mat = model.matrix(crim~.,data=boston.test)
+
+#Grid of all ranges of lambda
+grid = 10^seq(10,-2,length=100)
+
+#ridge regression model
+set.seed(4)
+ridge_mod = glmnet(train.mat,boston.train$crim,alpha = 0, lambda=grid,thresh = 1e-12)
+
+#Cross validation
+set.seed(4)
+cv_ridge = cv.glmnet(train.mat,boston.train$crim,alpha=0,lambda=grid,thresh = 1e-12)
+
+#finding the lambda for which cv error is minimum on training data
+bestlam.ridge = cv_ridge$lambda.min
+
+#Print a graph
+data.frame(lambda = cv_ridge$lambda, 
+           cv_mse = cv_ridge$cvm) %>%
+  ggplot(aes(x = lambda, y = cv_mse)) + 
+  geom_point() + 
+  geom_line() +
+  scale_x_continuous(trans = 'log10', breaks = c(0.01, 0.1, 1, 10, 100), labels = c(0.01, 0.1, 1, 10, 100)) + 
+  scale_y_continuous(labels = scales::comma_format()) + 
+  geom_vline(xintercept = bestlam.ridge, col = "red") +
+  geom_hline(yintercept = min(cv_ridge$cvm), col = "red") +
+  theme(legend.position = "bottom") + 
+  labs(x = "Lambda", 
+       y = "Cross-Validation MSE", 
+       col = "Non-Zero Coefficients:", 
+       title = "Ridge Regression - Lambda Selection")
+```
+
+The corresponding test MSE is:
+
+```{r, 6.11a ridge mse, echo=FALSE}
+#Use best lambda value on test data set to get the predicted values
+ridge_pred = predict(ridge_mod,s=bestlam.ridge,newx =test.mat)
+
+#Mean Square Error calculation
+ridge_mse = mean((boston.test$crim-ridge_pred)^2)
+ridge_mse
+```
+
+#### Lasso Regression Method
+We also ran a lasso regression model and determined the optimal $\lambda$ value using cross validation: 
+
+```{r, 6.11a lasso, echo=FALSE}
+
+#LASSO Model
+set.seed(4)
+lasso_mod = glmnet(train.mat,boston.train$crim,alpha = 1, lambda=grid,thresh = 1e-12)
+
+#Cross validation
+set.seed(4)
+cv.lasso = cv.glmnet(train.mat,boston.train$crim,alpha=1,lambda=grid,thresh = 1e-12)
+
+#finding the lambda for which cv error is minimum on training data
+bestlam.lasso = cv.lasso$lambda.min
+
+#Print graph
+data.frame(lambda = cv.lasso$lambda, 
+           cv_mse = cv.lasso$cvm) %>%
+  ggplot(aes(x = lambda, y = cv_mse)) + 
+  geom_point() + 
+  geom_line() +
+  scale_x_continuous(trans = 'log10', breaks = c(0.01, 0.1, 1, 10, 100), labels = c(0.01, 0.1, 1, 10, 100)) + 
+  scale_y_continuous(labels = scales::comma_format()) + 
+  geom_vline(xintercept = bestlam.lasso, col = "red") +
+  geom_hline(yintercept = min(cv.lasso$cvm), col = "red") +
+  theme(legend.position = "bottom") + 
+  labs(x = "Lambda", 
+       y = "Cross-Validation MSE", 
+       col = "Non-Zero Coefficients:", 
+       title = "Lasso Regression - Lambda Selection")
+```
+
+
+The corresponding test MSE is:
+
+```{r, 6.11a lasso mse, echo=FALSE}
+#Use best lambda value on test data set to get the predicted values
+lasso_pred = predict(lasso_mod,s=bestlam.lasso,newx =test.mat)
+
+#Mean Square Error calculation
+lasso_mse = mean((boston.test$crim-lasso_pred)^2)
+lasso_mse
+```
+
+#### Principal Components Regrssion
+We also ran a principal components regression and determined the optimal M value using cross validation:
+
+```{r, 6.11a pcr, echo=FALSE}
+#PCR Model
+library(pls)
+
+#Setting PCR Model
+set.seed(4)
+pcr.mod = pcr(boston.train$crim~.,data=boston.train, scale=TRUE,validation='CV')
+
+#Table of MSE Values with corresponding M
+model_pcr_mse = MSEP(pcr.mod, estimate = "CV")$val %>%
+  reshape2::melt() %>% 
+  mutate(model = 0:(nrow(.)-1)) %>%
+  dplyr::select(model, value) %>%
+  rename(CV_MSE = value)%>%
+  rename(M = model)
+
+#Plot
+model_pcr_mse %>%
+  mutate(min_CV_MSE = as.numeric(min(CV_MSE) == CV_MSE)) %>%
+  ggplot(aes(x = M, y = CV_MSE)) + 
+  geom_line(col = "grey55") + 
+  geom_point(size = 2, aes(col = factor(min_CV_MSE))) + 
+  scale_y_continuous(labels = scales::comma_format()) + 
+  scale_color_manual(values = c("blue", "red")) + 
+  theme(legend.position = "none") +
+  labs(x = "M", 
+       y = "Cross-Validation MSE", 
+       col = "Non-Zero Coefficients:", 
+       title = "PCR - M Selection")
+```
+
+The corresponding test MSE is:
+
+```{r, 6.11a pcr mse, echo=FALSE}
+best_n_pcr = which.min(model_pcr_mse$CV_MSE)-1
+
+#Predict on lowest number of components
+set.seed(4)
+pcr.pred = predict(pcr.mod,boston.test,ncomp = best_n_pcr)
+
+#Calculate MSE
+pcr_mse = mean((pcr.pred-boston.test$crim)^2)
+pcr_mse
+
+```
+
+#### Partial Least Squared Regression Model
+We also ran a principal components regression and determined the optimal M value using cross validation:
+
+```{r, 6.11a PLS, echo=FALSE}
+#PCL Model
+set.seed(4)
+pls.mod = plsr(boston.train$crim~., data=boston.train, scale=TRUE,validation='CV')
+
+#Table of MSE Values with corresponding M
+model_pls_mse = MSEP(pls.mod, estimate = "CV")$val %>%
+  reshape2::melt() %>% 
+  mutate(model = 0:(nrow(.)-1)) %>%
+  dplyr::select(model, value) %>%
+  rename(CV_MSE = value)%>%
+  rename(M = model)
+
+#Plot
+model_pls_mse %>%
+  mutate(min_CV_MSE = as.numeric(min(CV_MSE) == CV_MSE)) %>%
+  ggplot(aes(x = M, y = CV_MSE)) + 
+  geom_line(col = "grey55") + 
+  geom_point(size = 2, aes(col = factor(min_CV_MSE))) + 
+  scale_y_continuous(labels = scales::comma_format()) + 
+  scale_color_manual(values = c("blue", "red")) + 
+  theme(legend.position = "none") +
+  labs(x = "M", 
+       y = "Cross-Validation MSE", 
+       col = "Non-Zero Coefficients:", 
+       title = "PLS - M Selection")
+
+```
+
+The corresponding test MSE is:
+
+```{r, 6.11a PLS MSE, echo=FALSE}
+pls_best_n = which.min(model_pls_mse$CV_MSE)-1
+
+#Predict on lowest number of components
+set.seed(4)
+pls.pred = predict(pls.mod,boston.test,ncomp = pls_best_n)
+
+#Calculate MSE
+pls_mse = mean((pls.pred-boston.test$crim)^2)
+pls_mse
+```
+
+### (b)
+In Summary:
+
+```{r, 6.11b summary table, echo=FALSE}
+# R2 = 1 - (SS_res / SS_tot)^2
+SS_tot <- sum((boston.test$crim - mean(boston.test$crim))^2)
+
+summary_table = data.frame(
+  'Model' = c('Least Scquared','Ridge','Lasso','PCR','PLS'),
+  'R2' = c(1 - sum((boston.test$crim - ls_pred)^2) / SS_tot,
+           1 - sum((boston.test$crim - ridge_pred)^2) / SS_tot, 
+           1 - sum((boston.test$crim - lasso_pred)^2) / SS_tot,
+           1 - sum((boston.test$crim - pcr.pred)^2) / SS_tot, 
+           1 - sum((boston.test$crim - pls.pred)^2) / SS_tot),
+  'Error' = c(ls_mse,ridge_mse,lasso_mse,pcr_mse,pls_mse)
+)
+summary_table
+```
+
+The best performing model looking at cross-validation MSE error is the lasso model. You can also see that is the model with the largest $R^2$ value. 
+
+### (c)
+Looking at the lasso model (optimal linear model), we do not use all the features in the data. While adding more features or predictors will reduce the training MSE, but the cross validated test MSE would actually increase by adding in additional features.
+
+Here is a list of the coefficients used in the lasso model:
+
+```{r, 6.11c, echo=FALSE}
+lasso.coef = predict(lasso_mod,s=bestlam.lasso,type="coefficients")
+lasso.coef
+```
+
+## Chapter 4: #10 [not items e & f]
+```{r, 4.10 setup, echo=FALSE, include=FALSE}
+rm(list=ls())
+
+library(ISLR)
+Weekly = data.frame(Weekly)
+
+library(glmnet)
+library(caret)
+library(cvms)
+library(tibble)
+library(ggplot2)
+library(class)
+```
+### (a)
+The weekly data set has the following variables in it:
+
+```{r, 4.10a names, echo=FALSE}
+names(Weekly)
+```
+
+With these dimensions:
+
+```{r, 4.10a dim, echo=FALSE}
+dim(Weekly)
+```
+
+General summary of the Weekly data set is:
+
+```{r, 4.10a summary, echo=FALSE}
+summary(Weekly)
+```
+
+A quick look at the pairwise scatter plots:
+
+```{r, 4.10a pairwise, echo=FALSE}
+pairs(Weekly)
+```
+Quick check: are the rows in order?
+```{r, 4.10a order, echo=FALSE}
+diff = c()
+
+for (i in 2:nrow(Weekly)){
+  daily_dif = Weekly[i,2]-Weekly[i-1,8]
+  diff[i-2] = daily_dif
+}
+ifelse(sum(diff) == 0, 'Yes', 'No')
+```
+
+So, we saw in the summary above, all variables are quantitative except direction. We look at a matrix of the pairwise correlations (excluding direction):
+
+```{r, 4.10a correlation, echo=FALSE}
+cor(Weekly[,-9])
+```
+The most substantial correlation is between *Year* and *Volume*. 
+
+We can see in the graph below that volume increases over time:
+
+```{r, 4.10a volume, echo=FALSE}
+plot(Weekly$Volume, xlab = 'Time', ylab = 'Volume')
+```
+
+### (b)
+We fit a logistic regression to the entire data set predicting the probability of direction based on the 5 lags and volume:
+
+```{r, 4.10b, echo=FALSE}
+set.seed(5)
+logistic_mod = glm(Weekly$Direction ~ Weekly$Lag1 + Weekly$Lag2 + Weekly$Lag3 + Weekly$Lag4 + Weekly$Lag5 + Weekly$Volume, data = Weekly, family='binomial')
+summary(logistic_mod)
+```
+The **Lag2** variable is the only coefficient that has a p-value below 0.05, hence the only predictor that has a statistically significant relationship to the probability of direction.
+
+### (c)
+To assess the model, we built a confusion matrix (threshold of 0.5):
+
+```{r, 4.10c correlation, echo=FALSE}
+logistic_probs = predict(logistic_mod, type = "response")
+logistic_pred = factor(ifelse(logistic_probs > 0.5,'Up','Down'))
+```
+```{r, 4.10c correlationplot setup, echo=FALSE, include=FALSE}
+
+upcol = Weekly$Direction
+
+#Confusion matrix for the big tree
+basic_table = table(logistic_pred,upcol)
+cfm = as_tibble(basic_table)
+plot = plot_confusion_matrix(cfm,
+                      target_col = "upcol",
+                      prediction_col = "logistic_pred",
+                      counts_col = "n")
+```
+
+```{r, 4.10c correlationplot, echo=FALSE, fig.show="hold", out.width="50%"}
+confusionMatrix(data= logistic_pred, reference = Weekly$Direction, positive = "Up")
+plot
+```
+
+We see in the summary table and plot, that the model has a 56.11% accuracy (which is equivalent to overall fraction of correct predictions). This is not much better than predicting up every time and playing your odds (no information rate = p(up) in original data set). Since this model was done on the entire data set (and not training / test), this slight increase is not appealing.
+
+### (d)
+So, now we fit a logistic regression model using a training data period
+from 1990 to 2008 for p(direction) using *Lag2* as the only predictor. We then tested it on the test set, and got the following confusion matrix: 
+
+```{r, 4.10d summary, echo=FALSE}
+train = Weekly$Year <= 2008
+test = Weekly[!train,]
+
+#Logistic model on train set & only lag2 variable
+logistic_mod2 = glm(Direction ~ Lag2,data=Weekly, subset = train, family='binomial')
+
+#Predict using test
+log2_prob = predict(logistic_mod2, test, type='response')
+log2_pred = factor(ifelse(log2_prob > 0.5,'Up','Down'))
+
+
+```
+
+```{r, 4.10d plotsetup, echo=FALSE, include=FALSE}
+upcol2 = test$Direction
+
+#Confusion matrix for the big tree
+basic_table = table(log2_pred,upcol2)
+cfm = as_tibble(basic_table)
+plot2 = plot_confusion_matrix(cfm,
+                      target_col = "upcol2",
+                      prediction_col = "log2_pred",
+                      counts_col = "n")
+```
+
+```{r, 4.10d plot, echo=FALSE, fig.show="hold", out.width="50%"}
+#Confusion Matrix
+confusionMatrix(log2_pred, test$Direction, positive = "Up")
+
+plot2
+```
+
+This time, we get an accuracy of 62.5%. This means the the error rate is 37.5%. The no information rate actually has a baseline of 58.65% (Up appears 58.65% of the time in the test subset). So, yes, 62.5% > 58.65% however, the P-Value [Acc > NIR] : 0.2439  > 0.05, so there is no statistic evidence that this is better than the baseline.
+
+### (g)
+So next, we fit a KNN model (K=1) for the same train and test subset:
+
+```{r, 4.10g knn plotsetup, echo=FALSE}
+#Get training matrices 
+train.X = data.frame(cbind(Weekly$Lag2)[train,])
+test.X = data.frame(cbind(Weekly$Lag2)[!train,])
+train.Direction = Weekly$Direction[train]
+
+#Fit knn model
+set.seed(5)
+knn.pred = knn(train.X,test.X,train.Direction,k=1, prob=T)
+
+#Confusion matrix
+mat = confusionMatrix(data = knn.pred, 
+               reference = test$Direction, 
+               positive = "Up")
+```
+
+
+```{r, 4.10g plotsetup, echo=FALSE, include=FALSE}
+upcol2 = test$Direction
+
+#Confusion matrix for the big tree
+basic_table = table(knn.pred,upcol2)
+cfm = as_tibble(basic_table)
+plot3 = plot_confusion_matrix(cfm,
+                      target_col = "upcol2",
+                      prediction_col = "knn.pred",
+                      counts_col = "n")
+```
+
+```{r, 4.10g plot, echo=FALSE, echo=FALSE, fig.show="hold", out.width="50%"}
+mat
+
+plot3
+```
+
+And we get an accuracy of 50%... worse than the baseline. P-value is well above 0.05.
+
+### (h)
+The logistic regression using only lag2 as a predictor had the highest accuracy with 62.5%. 
+
+### (i)
+Now we tested out different K values for a KNN model, determined the optimal model based on accuracy. Here is the summary of what we got:
+
+```{r, 4.10i knn, echo=FALSE}
+## KNN (testing different ks)
+out_fract = c()
+
+for (i in 1:100){
+  set.seed(5)
+  knn.pred = knn(train.X,test.X,train.Direction,k=i, prob=T)
+  
+  #Table breakdown
+  tab = table(knn.pred,test$Direction)
+  
+  #Accuracy
+  out_fract[i]=(tab[1,1]+tab[2,2])/(tab[1,1]+tab[1,2]+tab[2,1]+tab[2,2])
+  
+}
+optimal_k = which.max(out_fract)
+
+cat('Optimal K value:', optimal_k, '\n','\n')
+
+knn.pred2 = knn(train.X,test.X,train.Direction,k=optimal_k, prob=T)
+```
+
+```{r, 4.10i knn plotsetup, echo=FALSE, include=FALSE}
+upcol2 = test$Direction
+
+#Confusion matrix for the big tree
+basic_table = table(knn.pred2,upcol2)
+cfm = as_tibble(basic_table)
+plot4 = plot_confusion_matrix(cfm,
+                      target_col = "upcol2",
+                      prediction_col = "knn.pred2",
+                      counts_col = "n")
+```
+
+```{r, 4.10i plot, echo=FALSE, fig.show="hold", out.width="50%"}
+#Confusion matrix
+confusionMatrix(data = knn.pred2, 
+                      reference = test$Direction, 
+                      positive = "Up")
+
+plot4
+```
+
+Best accuracy value had a k value of 47 with 61.54%. While it is an improvement over the no information rate, it is still not statistically significant (p-value = 0.311 > 0.05).
+
+Then we tested different logistic regression models (testing a variety of predictors). These were our results:
+
+```{r, 4.10i summary of results, echo=FALSE, include=FALSE}
+## Logistic Regression (testing different predictors)
+log_error = c()
+
+#Year
+logistic_modYEAR = glm(Direction ~ Year,data=Weekly, subset = train, family='binomial')
+
+#Predict using test
+logYEAR_prob = predict(logistic_modYEAR, test, type='response')
+logYEAR_pred = factor(ifelse(logYEAR_prob > 0.5,'Up','Down'))
+
+#Confusion Matrix
+mat = confusionMatrix(logYEAR_pred, test$Direction, positive = "Up")
+tab = mat$table
+log_error[1] = (tab[1,1]+tab[2,2])/(tab[1,1]+tab[1,2]+tab[2,1]+tab[2,2])
+
+#Lag1
+logistic_modLAG1 = glm(Direction ~ Lag1,data=Weekly, subset = train, family='binomial')
+
+#Predict using test
+logLAG1_prob = predict(logistic_modLAG1, test, type='response')
+logLAG1_pred = factor(ifelse(logLAG1_prob > 0.5,'Up','Down'))
+
+#Confusion Matrix
+mat = confusionMatrix(logLAG1_pred, test$Direction, positive = "Up")
+tab = mat$table
+log_error[2] = (tab[1,1]+tab[2,2])/(tab[1,1]+tab[1,2]+tab[2,1]+tab[2,2])
+
+#Lag 2
+logistic_modLAG2 = glm(Direction ~ Lag2,data=Weekly, subset = train, family='binomial')
+
+#Predict using test
+logLAG2_prob = predict(logistic_modLAG2, test, type='response')
+logLAG2_pred = factor(ifelse(logLAG2_prob > 0.5,'Up','Down'))
+
+#Confusion Matrix
+mat = confusionMatrix(logLAG2_pred, test$Direction, positive = "Up")
+tab = mat$table
+log_error[3] = (tab[1,1]+tab[2,2])/(tab[1,1]+tab[1,2]+tab[2,1]+tab[2,2])
+
+#Lag3
+logistic_modLAG3 = glm(Direction ~ Lag3,data=Weekly, subset = train, family='binomial')
+
+#Predict using test
+logLAG3_prob = predict(logistic_modLAG3, test, type='response')
+logLAG3_pred = factor(ifelse(logLAG3_prob > 0.5,'Up','Down'))
+
+#Confusion Matrix
+mat = confusionMatrix(logLAG3_pred, test$Direction, positive = "Up")
+tab = mat$table
+log_error[4] = (tab[1,1]+tab[2,2])/(tab[1,1]+tab[1,2]+tab[2,1]+tab[2,2])
+
+#Lag 5
+logistic_modLAG5 = glm(Direction ~ Lag5,data=Weekly, subset = train, family='binomial')
+
+#Predict using test
+logLAG5_prob = predict(logistic_modLAG5, test, type='response')
+logLAG5_pred = factor(ifelse(logLAG5_prob > 0.5,'Up','Down'))
+
+#Confusion Matrix
+mat = confusionMatrix(logLAG5_pred, test$Direction, positive = "Up")
+tab = mat$table
+log_error[5] = (tab[1,1]+tab[2,2])/(tab[1,1]+tab[1,2]+tab[2,1]+tab[2,2])
+
+#Volume
+logistic_modVOL = glm(Direction ~ Volume,data=Weekly, subset = train, family='binomial')
+
+#Predict using test
+logVOL_prob = predict(logistic_modVOL, test, type='response')
+logVOL_pred = factor(ifelse(logVOL_prob > 0.5,'Up','Down'))
+
+#Confusion Matrix
+mat = confusionMatrix(logVOL_pred, test$Direction, positive = "Up")
+tab = mat$table
+log_error[6] = (tab[1,1]+tab[2,2])/(tab[1,1]+tab[1,2]+tab[2,1]+tab[2,2])
+
+error = data.frame(log_error)
+error['Predictor'] = colnames(Weekly)[1:6]
+
+
+#Lag 2 + Year + Lag 3
+logistic_mod3VAR = glm(Direction ~ Year + Lag2 + Lag3,data=Weekly, subset = train, family='binomial')
+
+#Predict using test
+log3VAR_prob = predict(logistic_mod3VAR, test, type='response')
+log3VAR_pred = factor(ifelse(log3VAR_prob > 0.5,'Up','Down'))
+
+#Confusion Matrix
+mat = confusionMatrix(log3VAR_pred , test$Direction, positive = "Up")
+tab = mat$table
+log_error[7] = (tab[1,1]+tab[2,2])/(tab[1,1]+tab[1,2]+tab[2,1]+tab[2,2])
+
+error = data.frame(log_error)
+error['Predictor']= list(c(colnames(Weekly)[1:6],'Year + Lag2 + Lag1'))
+```
+
+```{r, 4.10i tableLOG, echo=FALSE, include=FALSE}
+error
+```
+Best accuracy still comes for direction logistic regression using on Lag2 as the predictor. 
+
+
+## Chapter 8: #8
+```{r, 8.8 setup, echo=FALSE, include=FALSE}
+rm(list=ls())
+
+library(tree)
+library(ISLR)
+library(randomForest)
+Carseats = data.frame(Carseats)
+```
+### (a)
+Split Sales data set into a training and test set. 
+```{r, 8.8a, echo=FALSE}
+set.seed(4)
+train = sample(1:nrow(Carseats),nrow(Carseats)/2)
+Carseats.train = Carseats[train,]
+Carseats.test = Carseats[-train,]
+```
+
+### (b)
+First, we fit a regression tree on the training set:
+
+```{r, 8.8b plot tree, echo=FALSE}
+set.seed(4)
+tree.carseats = tree(Sales~.,data=Carseats.train)
+
+#Plot the tree
+plot(tree.carseats)
+text(tree.carseats)
+```
+
+We got the following test MSE
+
+```{r, 8.8b test MSE, echo=FALSE}
+#Test MSE
+tree.pred=predict(tree.carseats,newdata=Carseats.test)
+mean((tree.pred-Carseats.test$Sales)^2)
+```
+
+We then cross validated to determine the optimal level of tree complexity to prune the tree.
+
+Cross Validation Plot:
+
+```{r, 8.8c CV, echo=FALSE}
+cv.tree.carseats = cv.tree(tree.carseats)
+plot(cv.tree.carseats$size,cv.tree.carseats$dev,type ='b')
+
+```
+
+We see the lowest MSE occurs at size 11. So we pruned the tree:
+
+```{r, 8.8c prune, echo=FALSE}
+prune.carseats=prune.tree(tree.carseats,best=11)
+
+plot(prune.carseats)
+text(prune.carseats) 
+```
+
+The corresponding test MSE was:
+
+```{r, 8.8c MSE, echo=FALSE}
+prune.pred=predict(prune.carseats,newdata=Carseats.test)
+mean((prune.pred-Carseats.test$Sales)^2)
+```
+
+We see that by pruning to 11 nodes, we see a slight improvement in MSE.
+*Not pruned: MSE = 6.33 ; Pruned: MSE = 6.41*
+
+### (d)
+We then used the bagging approach to analyze the training data. The corresponding test MSE was:
+
+```{r, 8.8d MSE, echo=FALSE}
+#Get number of variables
+p = ncol(Carseats)-1
+
+#Run random forest
+set.seed(456)
+bag.carseats = randomForest(Sales~.,data= Carseats.train,mtry=p,ntree=100,importance=TRUE)
+
+#Get Test MSE
+bag.predict = predict(bag.carseats,Carseats.test)
+mean((bag.predict-Carseats.test$Sales)^2)
+```
+
+Variable importance is:
+
+```{r, 8.8d importance, echo=FALSE, fig.show="hold", out.width="50%"}
+#Get importance of variables
+importance(bag.carseats)
+varImpPlot(bag.carseats)
+```
+
+Using bagging, we got a test MSE of 3.08. Using the importance function, we see that Price and ShelveLoc are the type most important variables.
+
+### (e)
+Next, we used random forest to analyze the data. The test MSE was:
+
+```{r, 8.8e MSE, echo=FALSE}
+set.seed(455)
+rf.carseats = randomForest(Sales ~ ., data = Carseats.train, mtry = 3, ntree = 100, importance = TRUE)
+rf.predict = predict(rf.carseats, newdata=Carseats.test)
+mean((rf.predict - Carseats.test$Sales)^2)
+```
+
+Variable importance is:
+```{r, 8.8e importance, echo=FALSE, fig.show="hold", out.width="50%"}
+#Get importance of variables
+importance(rf.carseats)
+varImpPlot(rf.carseats)
+```
+
+Using random forest with an m of 3 ($\sqrt{p}$), we got a test MSE of 3.80. With less variables considered at each split, we decorrelated the trees and our test MSE improved. We also got the same two important variables (Pirce & SleveLoc).
+
+## Chapter 8: #11
+```{r, 8.11 setup, echo=FALSE, include=FALSE}
+rm(list=ls())
+
+library(gbm)
+library(ISLR)
+Caravan = data.frame(Caravan)
+```
+### (a)
+The caravan data set had one qualitative or categorical variable. For simplicity sake, I created a dummy variable for the 'purchase' predictor. Then we created a training set with the first 1,000 observations for the caravan data set.
+```{r, 8.11a, echo=FALSE, include=FALSE}
+set.seed(4555)
+
+#Set dummy variables to use bernoulli distribution in gdm
+Caravan$Purchase=ifelse(Caravan$Purchase == "Yes",1,0)
+
+train = 1:1000
+Caravan.train = Caravan[train,]
+Caravan.test = Caravan[-train,]
+```
+
+### (b)
+First, we fit a boosting model to predict purchase:
+
+```{r, 8.11b, echo=FALSE, include=FALSE}
+set.seed(4555)
+boost.caravan <- gbm(Purchase~.,data=Caravan.train,distribution = "bernoulli",n.trees=1000,shrinkage=0.01)
+```
+```{r, 8.11b out, echo=FALSE, fig.show="hold", out.width="50%"}
+summary(boost.caravan)
+```
+
+Variables PPERSAUT and MKOOPKLA are the two most important predictors.
+
+### (c)
+We then used the boosting model to predict the response on the test data using a 20% threshold. This is the confusion matrix we got:
+
+```{r, 8.11c, echo=FALSE}
+set.seed(4555)
+
+#Predict the response on test data
+boost.predict = predict(boost.caravan, newdata=Caravan.test,n.trees = 1000, type = "response")
+boost.predicta = factor(ifelse(boost.predict>0.2,1,0))
+```
+
+```{r, 8.11c BOOST plotsetup, echo=FALSE, include=FALSE}
+purchasecol = Caravan.test$Purchase
+
+#Confusion matrix for the big tree
+basic_table = table(boost.predicta,purchasecol)
+cfm = as_tibble(basic_table)
+plotBOOST = plot_confusion_matrix(cfm,
+                      target_col = "purchasecol",
+                      prediction_col = "boost.predicta",
+                      counts_col = "n")
+```
+
+```{r, 8.11c BOOST plot, echo=FALSE, fig.show="hold", out.width="50%"}
+#Confusion matrix
+confusionMatrix(table(Caravan.test$Purchase,boost.predicta))
+
+plotBOOST
+```
+
+
+For boosting, the fraction of people predicted to make a purchase that in fact make one is 0.222 (=34/(119+34)).
+
+We fit a logisitic regression model to compare. This was the corresponding confusiong matrix:
+
+```{r, 8.11c logistic, echo=FALSE, include = FALSE}
+##Logistic Regression
+set.seed(4555)
+log.caravan = glm(Purchase ~ ., data = Caravan.train, family = "binomial")
+
+log.predict = predict(log.caravan, Caravan.test, type = "response")
+log.predicta = ifelse(log.predict>0.2,1,0)
+matrix = confusionMatrix(table(Caravan.test$Purchase,log.predicta))
+```
+```{r, 8.11c LOG plotsetup, echo=FALSE, include=FALSE}
+purchasecol = Caravan.test$Purchase
+
+#Confusion matrix for the big tree
+basic_table = table(log.predicta,purchasecol)
+cfm = as_tibble(basic_table)
+plotLOG = plot_confusion_matrix(cfm,
+                      target_col = "purchasecol",
+                      prediction_col = "log.predicta",
+                      counts_col = "n")
+```
+
+```{r, 8.11c LOG plot, echo=FALSE, fig.show="hold", out.width="50%"}
+matrix
+
+plotLOG
+```
+
+For logistic regression, the fraction of people predicted to make a purchase that in fact make one is 0.142 (=58/(350+58)). 
+
+The boosting model had a better specificity. 
+
+# Word Problems
+
+## Problem 1: Beauty Pays!
+```{r, W1 setup, echo=FALSE, include=FALSE}
+rm(list=ls())
+
+#Read Data in
+beauty = read.csv('BeautyData.csv',header=TRUE)
+```
+### (a)
+To start off, a quick glance at the data:
+
+```{r, W1 a pair, echo=FALSE}
+#Quick glance at the correlations
+plot(beauty)
+```
+
+Then we fit a multiple regression model to assess the effect of 'beauty' (rating and other determinants) on course ratings. This allowed us to see how each factor impacted course rating when all other factors were held constant:
+
+```{r, W1 a, echo=FALSE}
+## Multiple regression model on train
+beauty_reg = lm(beauty$CourseEvals ~. ,data=beauty)
+summary(beauty_reg)
+```
+We were determining the coefficients for following equation when we ran the regression:
+$$
+Ratings \approx \beta_0 + \beta_1 (BeautyScore)+\beta_2(Female)+\beta_3(lower)+\beta_4(nonenglish)+\beta_5(tenure)
+$$
+
+And our result was:
+$$
+Ratings \approx 4.07 + 0.30(BeautyScore)-0.33(Female)-0.33(lower)+-0.26(nonenglish)-0.1(tenure)
+$$
+
+All variables had a p-value < 0.05, concluding each variable was statistically significant. Some of these make sense:
+
+* **Nonenglish**: If a professor's native language is not english, he/she may have a harder time communicating with students impacting their course rating.
+* **Lower**: Assuming this means that they are teaching lower level class, this also makes sense since most students in those classes have to take them instead of wanting to.
+
+However, a couple of surprisings notes:
+
+* **Female**: It appears that female has a negative relationship. I would not assume that females are not as qualified to teach - so why is this happening? 
+* **Tenure**: Professors who are on the tenure track actually have worse course ratings. I wonder why this is. They are presumed to be more 'experienced' professors, right?
+
+### (b)
+The question is: are beautiful teachers really better teachers?? I would assume not - aka this is just discrimination. This model does NOT answer this question. We would need a controlled experiment - possibly one where we assess blind people's course ratings where beauty was not seen. Some of these variables would still be up for interpretation if it is discrimination (female, non-english if professor has an accent, lower, etc.) 
+
+## Problem 2: Housing Price Structure
+```{r, W2 setup, echo=FALSE, include=FALSE}
+rm(list=ls())
+
+midCity = read.csv('MidCity.csv',header=TRUE)
+```
+### (1)
+To start off, a quick glance at the data:
+
+```{r, W2a pair, echo=FALSE}
+#Quick glance at the correlations
+plot(midCity)
+```
+To assess if there was a premium for brick houses (all things considered equal), we used a multiple regression output. The coefficients tell us the relationship between price and the predictor with all other predictors held constant. 
+
+FIRST - 
+We first made dummy variables for **n2**,**n3**, and **brick**.
+
+```{r, W2a dummy, echo=FALSE, include=FALSE}
+dummy = midCity
+
+
+#Dummy Variables
+n2 = ifelse(midCity$Nbhd == 2, 1,0)
+n3 = ifelse(midCity$Nbhd == 3, 1,0)
+brick_dumb = ifelse(midCity$Brick == 'Yes',1,0)
+
+#Add Dummy variables to data set
+dummy$n2 = n2
+dummy$n3 = n3
+dummy$brick = brick_dumb
+
+#Drop original variables from the data set
+drop = c('Brick','Nbhd')
+dummy = dummy[,!(names(dummy) %in% drop)]
+
+#Fit linear model
+house_reg = lm(dummy$Price~dummy$brick+dummy$n2+dummy$n3+dummy$Offers+dummy$SqFt+dummy$Bedrooms+dummy$Bathrooms,data = dummy)
+```
+
+And then we fit a multiple regression model to solve for the coefficients in the following equation:
+$$
+Price \approx \beta_0 + \beta_1 (brick)+\beta_2(n2)+\beta_3(n3)+\beta_4(offers)+\beta_5(sqft)+ \beta_6(bed)+\beta_7(bath)
+$$
+
+
+This was our model (summary on left, 95% confidence interval on right):
+
+```{r, W2a lm out, echo=FALSE, fig.show="hold", out.width="50%"}
+#print model summary
+summary(house_reg)
+confint(house_reg,level=0.95)
+```
+
+
+Looking at the confidence interval table, we are 95% confident that the brick coefficient falls in this interval: [13,373.9, 21,220.8]. Since this interval does not contain 0 (which corresponds to the extremely low p-value), we can conclude there is indeed a significant relationship. We know it is a premium because the coefficient is positive. 
+
+### (2)
+We follow the same logic for the evaluation of neighborhood 3 (n3) as we did for bricks.
+
+Looking at the confidence interval table, we are 95% confident that the n3 coefficient falls in this interval: [14,436.3, 26,915.7]. Since this interval does not contain 0 (which corresponds to the extremely low p-value), we can conclude there is indeed a significant relationship. We know it is a premium because the coefficient is positive. 
+
+### (3)
+To assess if there is an extra premium for brick houses in neighborhood 3, we alter the model slightly (adding a Brick x N3 term):
+$$
+Price \approx \beta_0 + \beta_1 (brick)+\beta_2(n2)+\beta_3(n3)+\beta_4(offers)+\beta_5(sqft)+ \beta_6(bed)+\beta_7(bath)+\beta_8(brick\times n3)
+$$
+To do this, we create another dummy variable (n3ANDbrick) & take a look at the pairwise scatterplots to get feel for how it interacts with price:
+
+```{r, W2c dummy variable, echo=FALSE, include=FALSE}
+# Create dummy variable for n3 + brick & add to dummy dataframe
+n3ANDbrick = ifelse(dummy$n3==1 & dummy$brick==1,1,0)
+dummy$n3ANDbrick = n3ANDbrick
+```
+
+```{r, W2c pairs, echo=FALSE}
+plot(dummy)
+```
+
+We then fit a the new model and this is our summary output:
+
+```{r, W2c lm, echo=FALSE, include=FALSE}
+#fit a linear model
+house_reg2 = lm(dummy$Price~dummy$brick+dummy$n2+dummy$n3+dummy$Offers+dummy$SqFt+dummy$Bedrooms+dummy$Bathrooms+dummy$n3ANDbrick,data = dummy)
+```
+
+```{r, W2c lmout, echo=FALSE, fig.show="hold", out.width="50%"}
+#print model summary
+summary(house_reg2)
+confint(house_reg2,level=0.95)
+```
+
+Using the same logic as before as in parts 1 & 2, we are 95% confident that the n3ANDbrick coefficient falls in this interval: [1,933.9, 18,429.2]. Since this interval does not contain 0 (which corresponds to a p-value below 0.05), we can conclude there is indeed a significant relationship. We know it is a premium because the coefficient is positive. 
+
+### (4)
+To determine if we can combine N1 & N2, we look at our linear mode (I will refer to the first model that does not include n3ANDbrick). We are 95% confident that the coefficient for N2 falls within [-6,306, 3,184], resulting in a p-value above 0.05. Thus, we conclude that N2 does not have a signifigant relationship with price and can be grouped in with N1 for analysis.
+
+## Problem 3: What causes what?
+### (1)
+Correlation versus causation: The question at stake is will more police offices lower crime? This is hard to ‘tease out’ because there will naturally be a correlation between crime and police as mayors / people in charge’s natural response to crime is probably to hire more police. No surprise – the data is messy. We want to figure out the causal relationship / effect police will have on crime. 
+
+Not to mention there are a lot of variables that may impact crime on a specific day - location, activity in the city (holiday??), demographics of the city such as racial makeup and education, etc. By looking at one variable you will not get an accurate picture of crime.
+
+### (2)
+Researchers at UPENN got clever to combat the causation issue described in question one by tracking or collecting data on crime on days where there was an increase police for reasons unrelated to crime (i.e. ‘high alert days’ or days where terrorism was a concern in DC). 
+
+Their results in Table 2, have coefficients for two different models. The first model or column refers to the model looking at the relationship between Crime and High Alert dummy variable only (no other variables). We see a negative coefficient that is statistically significant (at the 5% level). The R2 value, or statistical measure of how close the data are to the fitted regression line, is 0.14. 
+
+The second model or column refers to the model looking at the relationship between Crime, High Alert dummy variable, and METRO ridership. In a multiple linear regression model, each coefficient measures the relationship between the ‘Y’ variable (crime here) and the given variable while all other variables are held constant. So, we see two coefficients for this model, one for the high-alert dummy variable and one for METRO ridership variable. The high-alert variable is still negative in this model and statistically significant (at the 5% level). The METRO ridership variable has a positive, higher, coefficient that is statistically significant (at the 1% level). The R2 value went up 0.03 compared to model one to 0.17 – this is one indication that the second model is more accurate. 
+
+
+### (3)
+METRO Ridership is the variable that measures midday ridership on public transportation. This is a way to assess ‘activity’ in the city. As discussed in question one, another potential concern with just assessing Crime ~ Police aside from causation was multiple variable impact. So, logically speaking – more activity probably means more crime. Therefore, by controlling this variable as well and running a multiple linear regression model, we are able to assess the high alert dummy variable’s relationship to crime when the activity level is held constant. 
+
+As we can see in Table 2, the relationship between crime and activity is high and certainly significant as stated in question 2. This further emphasizes the need to control. However, to note, this does not mean that model is sufficient. There may be another explanation; for instance, as discussed in the episode, criminals could fear terrorism on high-alert days and not leave their house causing a decrease in crime. That to say, the reasoning is not as sound, and this model is a good start a building the case. 
+
+### (4)
+Table 4 still examines the reduction in crime on high-alert days, but starts to examine the effect for different districts (district 1 versus others). In this model three variables are assessed to evaluate crime in DC:
+
+* DUMMY(high alert day & crime incidents in the first police district)
+* DUMMY(high alert day & crime incidents in other district)
+* METRO ridership
+
+Analyzing the coefficients for the two dummy variables (a cross between high alert days and location), we see that there is strong, negative relationship between district 1 crime and high alert days (negative coefficient that is statistically significant). However, the other districts do not have a statistically significant relationship - yes there is still a small, negative coefficient, but the 95% confidence interval (coefficient +/- 2* standard error) captures 0 and therefore we cannot reject the null hypothesis that the coefficient = 0. 
+
+To note: METRO ridership still has a positive, statistically significant relationship (slope did decrease in size). 
+
+## Problem 4: Neural Nets
+```{r, W4 setup, echo=FALSE, include=FALSE}
+rm(list=ls())
+
+#Load in neutral nets
+library(nnet)
+
+#Boston Data
+library(MASS)
+library(class)
+
+Boston = data.frame(Boston)
+```
+
+To evaluate neural nets for the Boston housing data, we first must standardize the x's. To start out with, we fit a neural net with just one x (lstat), size = 3, decay = 0.0001.
+
+```{r, W4 initial fit, echo=FALSE, include=FALSE}
+###standardize the x's
+minv = rep(0,13)
+maxv = rep(0,13)
+bostonS = Boston
+for(i in 1:13) {
+  minv[i] = min(Boston[[i]])
+  maxv[i] = max(Boston[[i]])
+  bostonS[[i]] = (Boston[[i]]-minv[i])/(maxv[i]-minv[i])
+}
+
+###fit nn with just one x=lstat
+set.seed(99)
+znn = nnet(medv~lstat,bostonS,size=3,decay=.0001,linout=T)
+
+###get fits, print summary,  and plot fit
+fznn = predict(znn,bostonS)
+oo = order(bostonS$lstat)
+```
+This was our output:
+
+```{r, W4 initial fit out, echo=FALSE, fig.show="hold", out.width="50%"}
+plot(bostonS$lstat,bostonS$medv)
+lines(bostonS$lstat[oo],fznn[oo],col="red",lwd=5)
+abline(lm(medv~lstat,bostonS)$coef)
+
+summary(znn)
+```
+
+We then tried four different fits still only including lstat as the sole predictor (size = 3 or 50; decay = .5 or .00000001).
+These were out outputs:
+
+```{r, W4 four fits, echo=FALSE, include=FALSE}
+set.seed(14)
+znn1 = nnet(medv~lstat,bostonS,size=3,decay=.5,linout=T)
+znn2 = nnet(medv~lstat,bostonS,size=3,decay=.00000001,linout=T)
+znn3 = nnet(medv~lstat,bostonS,size=50,decay=.5,linout=T)
+znn4 = nnet(medv~lstat,bostonS,size=50,decay=.00000001,linout=T)
+temp = data.frame(medv = bostonS$medv, lstat = bostonS$lstat)
+znnf1 = predict(znn1,temp)
+znnf2 = predict(znn2,temp)
+znnf3 = predict(znn3,temp)
+znnf4 = predict(znn4,temp)
+```
+
+
+```{r, W4 four fit out, echo=FALSE, fig.show="hold", out.width="50%"}
+### plot the fits
+
+par(mfrow=c(2,2))
+plot(bostonS$lstat,bostonS$medv)
+lines(bostonS$lstat[oo],znnf1[oo],lwd=2, col='blue')
+title("size=3, decay=.5")
+plot(bostonS$lstat,bostonS$medv)
+lines(bostonS$lstat[oo],znnf2[oo],lwd=2, col='blue')
+title("size=3, decay=.00001")
+plot(bostonS$lstat,bostonS$medv)
+lines(bostonS$lstat[oo],znnf3[oo],lwd=2, col='blue')
+title("size = 50, decay = .5")
+plot(bostonS$lstat,bostonS$medv)
+lines(bostonS$lstat[oo],znnf4[oo],lwd=2, col='blue')
+title("size = 50, decay = .00001")
+```
+
+We then fit a neural net using all inputs (size = 5, decay = 0.1):
+```{r, W4 all fit, echo=FALSE, include=FALSE}
+### Now, all the x's
+multi_znn = nnet(medv~.,bostonS,size=5,decay=.1,linout=T)
+multi_nn_pedict= predict(multi_znn,bostonS)
+multi_lm = lm(medv~.,bostonS)
+multi_lm_predict = predict(multi_lm,bostonS)
+temp = data.frame(y=bostonS$medv,fnn=multi_nn_pedict,flm=multi_lm_predict)
+```
+
+```{r, W4 all out, echo=FALSE, fig.show="hold", out.width="100%"}
+pairs(temp)
+print(cor(temp))
+```
+
+We see that there is is 0.968 correlation between the neural net model and the price (compared to the linear model which had a 0.861 correlation). 
+
+
+To get a sense for how size effects the correlation, we iterated over values 1:50 and recorded their correlation (decay = 0.1). Here is a summary table:
+
+```{r, W4 size play, echo=FALSE, include=FALSE}
+correlation = c()
+for (i in 1:50){
+  multi_znn = nnet(medv~.,bostonS,size=i,decay=.1,linout=T)
+  multi_nn_pedict= predict(multi_znn,bostonS)
+  temp = data.frame(y=bostonS$medv,fnn=multi_nn_pedict,flm=multi_lm_predict)
+  
+  correlation[i]=cor(temp)[2,1]
+}
+```
+
+```{r, W4 size play table, echo=FALSE}
+size = data.frame('Size'=1:50,
+           'Correlation' = correlation)
+size
+```
+
+We see the optimal size value is:
+```{r, W4 optimal size, echo=FALSE}
+optimal_size = which.max(size$Correlation)
+optimal_size
+```
+
+We now do the same thing for decay looking at values from a factor of 10 (0.0000001,0.000001,0.00001,0.0001,0.001,0.01,0.1) using the optimal size determined above. 
+```{r, W4 decay play, echo=FALSE, include=FALSE}
+decay =c()
+
+multi_znnD1 = nnet(medv~.,bostonS,size=optimal_size,decay=0.0000001,linout=T)
+multiD1_nn_pedict= predict(multi_znnD1,bostonS)
+tempD1 = data.frame(y=bostonS$medv,fnn=multiD1_nn_pedict)
+decay[1] = cor(tempD1)[2,1]
+
+multi_znnD2 = nnet(medv~.,bostonS,size=optimal_size,decay=0.000001,linout=T)
+multiD2_nn_pedict= predict(multi_znnD2,bostonS)
+tempD2 = data.frame(y=bostonS$medv,fnn=multiD2_nn_pedict)
+decay[2] = cor(tempD2)[2,1]
+
+multi_znnD3 = nnet(medv~.,bostonS,size=optimal_size,decay=0.00001,linout=T)
+multiD3_nn_pedict= predict(multi_znnD3,bostonS)
+tempD3 = data.frame(y=bostonS$medv,fnn=multiD3_nn_pedict)
+decay[3] = cor(tempD3)[2,1]
+
+multi_znnD4 = nnet(medv~.,bostonS,size=optimal_size,decay=0.00001,linout=T)
+multiD4_nn_pedict= predict(multi_znnD4,bostonS)
+tempD4 = data.frame(y=bostonS$medv,fnn=multiD4_nn_pedict)
+decay[4] = cor(tempD4)[2,1]
+
+multi_znnD5 = nnet(medv~.,bostonS,size=optimal_size,decay=0.0001,linout=T)
+multiD5_nn_pedict= predict(multi_znnD5,bostonS)
+tempD5 = data.frame(y=bostonS$medv,fnn=multiD5_nn_pedict)
+decay[5] = cor(tempD5)[2,1]
+
+multi_znnD6 = nnet(medv~.,bostonS,size=optimal_size,decay=0.001,linout=T)
+multiD6_nn_pedict= predict(multi_znnD6,bostonS)
+tempD6 = data.frame(y=bostonS$medv,fnn=multiD6_nn_pedict)
+decay[6] = cor(tempD6)[2,1]
+
+multi_znnD7 = nnet(medv~.,bostonS,size=optimal_size,decay=0.01,linout=T)
+multiD7_nn_pedict= predict(multi_znnD7,bostonS)
+tempD7 = data.frame(y=bostonS$medv,fnn=multiD7_nn_pedict)
+decay[7] = cor(tempD7)[2,1]
+```
+
+```{r, W4 decay play table, echo=FALSE}
+data_decay = data.frame('Decay' = c(0.0000001,0.000001,0.00001,0.0001,0.001,0.01,0.1),
+                        'Correlation' = decay)
+data_decay
+```
+
+Our optimal decay value was:
+
+```{r, W4 optimal decay, echo=FALSE}
+optimal_decayi = which.max(data_decay$Correlation)
+optimal_decay = data_decay$Decay[optimal_decayi]
+optimal_decay
+```
+
+This gives us the following 'optimal' model with a 0.9899 correlation:
+
+```{r, W4 optimal, echo=FALSE, include=FALSE}
+### Now, all the x's
+optimal_znn = nnet(medv~.,bostonS,size=optimal_size,decay=optimal_decay,linout=T)
+optimal_nn_pedict= predict(optimal_znn,bostonS)
+opt_temp = data.frame(y=bostonS$medv,fnn=optimal_nn_pedict,flm=multi_lm_predict)
+```
+
+```{r, W4 optimal out, echo=FALSE, fig.show="hold", out.width="100%"}
+pairs(opt_temp)
+print(cor(opt_temp))
+```
+
+
+## Probem 5: Final Project
+Our group worked extremely well together, taking on tasks individually and the reviewing each part as a team to make sure we all understood the output. Considering I was not the strongest ‘R’ coder, I found myself as more of the business mastermind. I started off my catching the famous regression vs classification problem, and then spent time challenging our group to think about how our conclusions could fit to our business question/ objective – ultimately encouraging a business application. I helped connect insights across models so that our group could look at things from the top down. In regards to coding, I attempted to put together the bagging model and worked with Ashkat (assigned to random forest). Obviously, the two models go hand and hand.  
+
+I thought overall our group worked effectively, leaning on each of our personal strengths.
